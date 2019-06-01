@@ -1,0 +1,94 @@
+import numpy as np
+from pathlib import Path
+import struct
+import matplotlib.pyplot as plt
+import copy
+import math 
+dataset_path=Path('./MNIST')
+train_img_path=dataset_path/'train-images.idx3-ubyte'
+train_lab_path=dataset_path/'train-labels.idx1-ubyte'
+test_img_path=dataset_path/'t10k-images.idx3-ubyte'
+test_lab_path=dataset_path/'t10k-labels.idx1-ubyte'
+def save_model(model):     np.save(dataset_path/'model.npy',model,allow_pickle=True)
+def open_model():     return np.load(dataset_path/'model.npy',allow_pickle=True)
+parameters=open_model() 
+with open(train_img_path,'rb') as f:     struct.unpack('>4i',f.read(16))     train_img=np.fromfile(f,dtype=np.uint8).reshape(-1,28*28)/255
+with open(train_lab_path,'rb') as f:     struct.unpack('>2i',f.read(8))     train_lab=np.fromfile(f,dtype=np.uint8)
+with open(test_img_path,'rb') as f:     struct.unpack('>4i',f.read(16))     test_img=np.fromfile(f,dtype=np.uint8).reshape(-1,28*28)/255
+with open(test_lab_path,'rb') as f:     struct.unpack('>2i',f.read(8))     test_lab=np.fromfile(f,dtype=np.uint8)     
+def tanh(x):     return np.tanh(x)
+def softmax(x):     exp=np.exp(x-x.max())     return exp/exp.sum()
+def gradient_tanh(x):     return 1/(np.cosh(x))**2
+def gradient_softmax(x):     sm=softmax(x)     return np.diag(sm)-np.outer(sm,sm) 
+train_num = 60000import numpy as np
+from pathlib import Path
+import struct
+import matplotlib.pyplot as plt
+import copy
+import math 
+dataset_path=Path('./MNIST')
+train_img_path=dataset_path/'train-images.idx3-ubyte'
+train_lab_path=dataset_path/'train-labels.idx1-ubyte'
+test_img_path=dataset_path/'t10k-images.idx3-ubyte'
+test_lab_path=dataset_path/'t10k-labels.idx1-ubyte'
+def save_model(model):     np.save(dataset_path/'model.npy',model,allow_pickle=True)
+def open_model():     return np.load(dataset_path/'model.npy',allow_pickle=True)
+parameters=open_model() 
+with open(train_img_path,'rb') as f:     struct.unpack('>4i',f.read(16))     train_img=np.fromfile(f,dtype=np.uint8).reshape(-1,28*28)/255
+with open(train_lab_path,'rb') as f:     struct.unpack('>2i',f.read(8))     train_lab=np.fromfile(f,dtype=np.uint8)
+with open(test_img_path,'rb') as f:     struct.unpack('>4i',f.read(16))     test_img=np.fromfile(f,dtype=np.uint8).reshape(-1,28*28)/255
+with open(test_lab_path,'rb') as f:     struct.unpack('>2i',f.read(8))     test_lab=np.fromfile(f,dtype=np.uint8)     
+def tanh(x):     return np.tanh(x)
+def softmax(x):     exp=np.exp(x-x.max())     return exp/exp.sum()
+def gradient_tanh(x):     return 1/(np.cosh(x))**2
+def gradient_softmax(x):     sm=softmax(x)     return np.diag(sm)-np.outer(sm,sm) 
+train_num = 60000
+test_num = 10000
+batch_size=50
+dimensions=[28*28,10]
+activation=[tanh,softmax]
+distribution=[
+{ 	'b':[0,0]
+},{ 	'b':[0,0], 	'w':[-math.sqrt(6/(dimensions[0]+dimensions[1])),math.sqrt(6/(dimensions[0]+dimensions[1]))]
+}]
+gradient={tanh:gradient_tanh,softmax:gradient_softmax}
+onehot=np.identity(dimensions[-1]) 
+def init_model_b(layer):     dist=distribution[layer]['b']     return np.random.rand(dimensions[layer])*(dist[1]-dist[0])+dist[0]
+def init_model_w(layer):     dist=distribution[layer]['w']     return np.random.rand(dimensions[layer-1],dimensions[layer])*(dist[1]-dist[0])+dist[0]
+def init_model():     model=[]     for i in range(len(distribution)):         layer_model= {}         for j in distribution[i].keys():             if j=='b':                 layer_model['b']=init_model_b(i)                 continue             if j=='w':                 layer_model['w']=init_model_w(i)                 continue         model.append(layer_model)     return model 
+def predict(img,model):     I0=img+model[0]['b']     O0=activation[0](I0)     I1=np.dot(O0,model[1]['w'])+model[1]['b']     O1=activation[1](I1)     return O1 
+def show_prediction():     random=np.random.randint(train_num)     print('predict:',predict(train_img[random],parameters).argmax(),'\n','result:',train_lab[random])     plt.imshow(train_img[random].reshape(28, 28), cmap='gray')     
+def get_gradient(img,lab,model):     l0_in = img+model[0]['b']     l0_out = activation[0](l0_in)     l1_in = np.dot(l0_out,model[1]['w'])+model[1]['b']     l1_out = activation[1](l1_in)       diff = onehot[lab]-l1_out     act1 = np.dot(gradient[activation[1]](l1_in),diff)     grad_b1 = -2*act1     grad_w1 = -2*np.outer(l0_out,act1)     grad_b0 = -2*gradient[activation[0]](l0_in)*np.dot(model[1]['w'],act1)      return {'b1':grad_b1,'w1':grad_w1,'b0':grad_b0} 
+def correct(model,grad,learn_rate):     model_tmp=copy.deepcopy(model)     model_tmp[1]['w']-=learn_rate*grad['w1']     model_tmp[1]['b']-=learn_rate*grad['b1']     model_tmp[0]['b']-=learn_rate*grad['b0']     return model_tmp 
+def sqr_loss(img,lab,model):     y_pred=predict(img,model)     return np.outer(onehot[lab]-y_pred,onehot[lab]-y_pred)
+def test_loss(model):     l=0     for i in range(test_num):         l+=sqr_loss(test_img[i],test_lab[i],model).sum()     return l 
+def test(model):     correct=[predict(test_img[img_i],model).argmax()==test_lab[img_i] for img_i in range(len(test_lab))]     print('test result:{}'.format(correct.count(True)/len(correct))) 
+def train_batch(current_batch,model):     grad_pre=get_gradient(train_img[current_batch*batch_size],train_lab[current_batch*batch_size],model)     for img_i in range(1,batch_size):         grad_tmp=get_gradient(train_img[current_batch*batch_size+img_i],train_lab[current_batch*batch_size+img_i],model)         for keys in grad_tmp.keys():             grad_pre[keys]+=grad_tmp[keys]     for keys in grad_pre.keys():         grad_pre[keys]/=batch_size     return grad_pre 
+#parameters=init_model()
+for present in range(3):     for i in range(train_num//batch_size):         if i%100==99:             test(parameters)             print("running batch {}/{}".format(i+1,train_num//batch_size))             #print(test_loss(parameters))         grad_tmp=train_batch(i,parameters)         parameters=correct(parameters,grad_tmp,0.001)
+save_model(parameters)
+
+test_num = 10000
+batch_size=50
+dimensions=[28*28,10]
+activation=[tanh,softmax]
+distribution=[
+{ 	'b':[0,0]
+},{ 	'b':[0,0], 	'w':[-math.sqrt(6/(dimensions[0]+dimensions[1])),math.sqrt(6/(dimensions[0]+dimensions[1]))]
+}]
+gradient={tanh:gradient_tanh,softmax:gradient_softmax}
+onehot=np.identity(dimensions[-1]) 
+def init_model_b(layer):     dist=distribution[layer]['b']     return np.random.rand(dimensions[layer])*(dist[1]-dist[0])+dist[0]
+def init_model_w(layer):     dist=distribution[layer]['w']     return np.random.rand(dimensions[layer-1],dimensions[layer])*(dist[1]-dist[0])+dist[0]
+def init_model():     model=[]     for i in range(len(distribution)):         layer_model= {}         for j in distribution[i].keys():             if j=='b':                 layer_model['b']=init_model_b(i)                 continue             if j=='w':                 layer_model['w']=init_model_w(i)                 continue         model.append(layer_model)     return model 
+def predict(img,model):     I0=img+model[0]['b']     O0=activation[0](I0)     I1=np.dot(O0,model[1]['w'])+model[1]['b']     O1=activation[1](I1)     return O1 
+def show_prediction():     random=np.random.randint(train_num)     print('predict:',predict(train_img[random],parameters).argmax(),'\n','result:',train_lab[random])     plt.imshow(train_img[random].reshape(28, 28), cmap='gray')     
+def get_gradient(img,lab,model):     l0_in = img+model[0]['b']     l0_out = activation[0](l0_in)     l1_in = np.dot(l0_out,model[1]['w'])+model[1]['b']     l1_out = activation[1](l1_in)       diff = onehot[lab]-l1_out     act1 = np.dot(gradient[activation[1]](l1_in),diff)     grad_b1 = -2*act1     grad_w1 = -2*np.outer(l0_out,act1)     grad_b0 = -2*gradient[activation[0]](l0_in)*np.dot(model[1]['w'],act1)      return {'b1':grad_b1,'w1':grad_w1,'b0':grad_b0} 
+def correct(model,grad,learn_rate):     model_tmp=copy.deepcopy(model)     model_tmp[1]['w']-=learn_rate*grad['w1']     model_tmp[1]['b']-=learn_rate*grad['b1']     model_tmp[0]['b']-=learn_rate*grad['b0']     return model_tmp 
+def sqr_loss(img,lab,model):     y_pred=predict(img,model)     return np.outer(onehot[lab]-y_pred,onehot[lab]-y_pred)
+def test_loss(model):     l=0     for i in range(test_num):         l+=sqr_loss(test_img[i],test_lab[i],model).sum()     return l 
+def test(model):     correct=[predict(test_img[img_i],model).argmax()==test_lab[img_i] for img_i in range(len(test_lab))]     print('test result:{}'.format(correct.count(True)/len(correct))) 
+def train_batch(current_batch,model):     grad_pre=get_gradient(train_img[current_batch*batch_size],train_lab[current_batch*batch_size],model)     for img_i in range(1,batch_size):         grad_tmp=get_gradient(train_img[current_batch*batch_size+img_i],train_lab[current_batch*batch_size+img_i],model)         for keys in grad_tmp.keys():             grad_pre[keys]+=grad_tmp[keys]     for keys in grad_pre.keys():         grad_pre[keys]/=batch_size     return grad_pre 
+#parameters=init_model()
+for present in range(3):     for i in range(train_num//batch_size):         if i%100==99:             test(parameters)             print("running batch {}/{}".format(i+1,train_num//batch_size))             #print(test_loss(parameters))         grad_tmp=train_batch(i,parameters)         parameters=correct(parameters,grad_tmp,0.001)
+save_model(parameters)
